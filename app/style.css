@@ -1,12 +1,151 @@
-html, body { margin: 0; height: 100%; background: #f2f0f4; color: #1d1b22; font: 15px/1.4 system-ui, sans-serif; }
-.app { display: flex; gap: 32px; align-items: center; justify-content: center; height: 100%; padding: 24px; box-sizing: border-box; }
-.controls { display: flex; flex-direction: column; gap: 14px; width: 280px; }
-.controls h1 { margin: 0; font-size: 28px; }
-.controls p { margin: 0; color: #5c5866; }
-label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
-input[type=text] { font: inherit; padding: 8px; border: 1px solid #c9c4d1; border-radius: 6px; }
-button { font: inherit; font-weight: 700; padding: 10px; border: 0; border-radius: 6px; background: #1d1b22; color: #fff; cursor: pointer; }
-canvas { width: min(70vh, 60vw); height: min(70vh, 60vw); box-shadow: 0 8px 30px rgba(0, 0, 0, 0.2); }
-body.shot-cover .controls { display: none; }
-body.shot-cover .app { padding: 0; }
-body.shot-cover canvas { width: 100vw; height: 100vh; box-shadow: none; }
+@font-face {
+  font-family: "Anton";
+  src: url("./fonts/Anton-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Archivo Black";
+  src: url("./fonts/ArchivoBlack-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+:root {
+  --bg: #0d0616;
+  --panel: #1a0f2e;
+  --panel-2: #241640;
+  --ink: #f4efff;
+  --muted: #b9a8d9;
+  --accent: #ff7e47;
+  --accent-2: #7df9ff;
+  --line: #3a2560;
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+}
+.topbar {
+  padding: 18px 24px 8px;
+  border-bottom: 1px solid var(--line);
+}
+.topbar h1 {
+  margin: 0;
+  font-family: "Anton", "Archivo Black", sans-serif;
+  font-size: 34px;
+  letter-spacing: 1px;
+  color: var(--accent);
+  text-transform: uppercase;
+}
+.tagline { margin: 4px 0 0; color: var(--muted); }
+.app {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 20px;
+  padding: 20px 24px 28px;
+  align-items: start;
+}
+.controls {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+.controls h2 {
+  margin: 18px 0 8px;
+  font-family: "Archivo Black", sans-serif;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--accent-2);
+}
+.controls h2:first-child { margin-top: 0; }
+.field { display: block; margin: 8px 0; color: var(--muted); font-size: 13px; }
+.field input[type="text"],
+.field input[type="number"] {
+  display: block;
+  width: 100%;
+  margin-top: 4px;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 15px;
+}
+.field input[type="range"] { width: 100%; accent-color: var(--accent); }
+.field span { color: var(--ink); font-weight: 600; }
+.picker { display: flex; flex-wrap: wrap; gap: 6px; }
+.pick {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--ink);
+  font-size: 13px;
+  cursor: pointer;
+}
+.pick:hover { border-color: var(--accent); }
+.pick.active { background: var(--accent); border-color: var(--accent); color: #160a24; font-weight: 700; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+button { cursor: pointer; font-size: 14px; }
+.primary {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #160a24;
+  font-weight: 800;
+}
+.secondary {
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--ink);
+}
+#status { min-height: 1.2em; color: var(--accent-2); font-size: 13px; }
+.hint { color: var(--muted); font-size: 13px; }
+.preview { position: sticky; top: 12px; }
+.preview-wrap {
+  background: #000;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 320px;
+}
+.preview-wrap canvas { display: block; max-width: 100%; height: auto; }
+.size-note { color: var(--muted); font-size: 13px; text-align: center; }
+
+/* Screenshot scenes: cover fills the viewport, editor keeps the UI. */
+body.shot-cover { background: #000; }
+body.shot-cover .topbar,
+body.shot-cover .controls,
+body.shot-cover .size-note { display: none; }
+body.shot-cover .app { display: block; padding: 0; }
+body.shot-cover .preview { position: static; }
+body.shot-cover .preview-wrap {
+  width: 100vw;
+  height: 100vh;
+  min-height: 0;
+  border: none;
+  border-radius: 0;
+}
+body.shot-cover .preview-wrap canvas { width: 100%; height: 100%; object-fit: contain; }
+
+@media (max-width: 900px) {
+  .app { grid-template-columns: 1fr; }
+  .preview { position: static; }
+}
