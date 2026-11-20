@@ -1,156 +1,142 @@
-// Presets: the five panel layouts, four colour grades, three export sizes
-// and the caption samples. Layouts are functions of (w, h) returning panel
-// rects {x, y, w, h, photo, treatment, rotate} in fractions of the cover,
-// so one layout works at every export size.
+// Grades (colour palettes + photo treatments) and layouts (panel maps) for
+// the cover maker. Every number here comes from the round-2 design brief:
+// the champion layout is vice-hero, the champion grade is vivid, and the
+// other four grades and five layouts stay selectable in the editor.
 
-// --- Grades: sky stops, sun, skyline, duotone pair, caption colours. ---
 export const GRADES = {
-  sunset: {
-    label: 'Sunset',
-    sky: [[0, '#2b1055'], [0.45, '#b83280'], [0.75, '#ff7e47'], [1, '#ffc46b']],
-    sun: '#ffe9a8', sunGlow: 'rgba(255,170,90,0.55)',
-    far: '#4a1e63', near: '#1c0b2e', windows: '#ffd166', dots: '#ff9e6b',
-    dark: '#2b1030', light: '#ffb36b',
-    caption: '#ffffff', outline: '#1c0b2e', kicker: '#ffd166', accent: '#ff7e47',
+  vivid: {
+    id: 'vivid', name: 'Vivid Sunset', treatment: 'vivid',
+    sky: [[0, '#2b1055'], [0.40, '#a4137a'], [0.70, '#ff5e3a'], [1.00, '#ffc46b']],
+    sun: '#ffe9a8', glow: 'rgba(255,140,60,0.6)',
+    far: '#3d1658', near: '#160a28', windows: '#ffd166', dots: '#ff9e6b',
+    duoDark: '#2b1030', duoLight: '#ffb36b',
+    caption: '#ffffff', outline: '#1c0b2e', kicker: '#ffd166', accent: '#ff2e88',
     scrim: 'rgba(10,6,18,0.8)',
   },
-  neon: {
-    label: 'Neon',
-    sky: [[0, '#0d0221'], [0.45, '#4b0f70'], [0.75, '#c2188b'], [1, '#ff2e88']],
-    sun: '#7df9ff', sunGlow: 'rgba(255,46,136,0.6)',
-    far: '#2a0a4a', near: '#0d0221', windows: '#7df9ff', dots: '#ff2e88',
-    dark: '#0a1030', light: '#ff5fd0',
-    caption: '#ffffff', outline: '#0d0221', kicker: '#7df9ff', accent: '#ff2e88',
+  duotone: {
+    id: 'duotone', name: 'Duotone Dusk', treatment: 'duotone',
+    sky: [[0, '#1a1030'], [0.45, '#5c2358'], [0.75, '#b34a5e'], [1.00, '#e08a5a']],
+    sun: '#ffd9a0', glow: 'rgba(200,110,80,0.5)',
+    far: '#2e1745', near: '#120a20', windows: '#e8b25a', dots: '#c97e5a',
+    duoDark: '#241533', duoLight: '#ffb36b',
+    caption: '#ffffff', outline: '#1a0b26', kicker: '#ffd166', accent: '#ff5e8a',
+    scrim: 'rgba(12,7,20,0.8)',
+  },
+  halftone: {
+    id: 'halftone', name: 'Halftone Pop', treatment: 'halftone',
+    sky: [[0, '#12082e'], [0.40, '#7a1e6e'], [0.70, '#ff7e47'], [1.00, '#ffc46b']],
+    sun: '#fff3c4', glow: 'rgba(255,120,60,0.55)',
+    far: '#33124e', near: '#140a26', windows: '#ffd166', dots: '#ff9e6b',
+    duoDark: '#20102e', duoLight: '#ffb36b',
+    caption: '#ffffff', outline: '#1c0b2e', kicker: '#ffd166', accent: '#ff2e88',
     scrim: 'rgba(10,6,18,0.8)',
   },
-  nights: {
-    label: 'Vice Nights',
-    sky: [[0, '#050914'], [0.5, '#16224d'], [0.8, '#3a2a6e'], [1, '#7a3fa0']],
-    sun: '#e8ecff', sunGlow: 'rgba(140,170,255,0.5)',
-    far: '#141a38', near: '#070a18', windows: '#9db8ff', dots: '#8fb7ff',
-    dark: '#0a0a24', light: '#8fb7ff',
-    caption: '#f2f5ff', outline: '#070a18', kicker: '#9db8ff', accent: '#7df9ff',
-    scrim: 'rgba(10,6,18,0.8)',
+  clean: {
+    id: 'clean', name: 'Clean Coast', treatment: 'clean',
+    sky: [[0, '#1b2a52'], [0.45, '#3a6ea5'], [0.75, '#e08a5a'], [1.00, '#f2c078']],
+    sun: '#fff6d8', glow: 'rgba(255,190,110,0.5)',
+    far: '#2c3a5e', near: '#141c30', windows: '#ffe9a8', dots: '#f2b078',
+    duoDark: '#1c2440', duoLight: '#f2c078',
+    caption: '#ffffff', outline: '#14203a', kicker: '#ffe9a8', accent: '#ff7e47',
+    scrim: 'rgba(10,14,28,0.8)',
   },
-  dawn: {
-    label: 'Pastel Dawn',
-    sky: [[0, '#5b4a8a'], [0.45, '#c98bb0'], [0.75, '#ffb08a'], [1, '#ffe3b3']],
-    sun: '#fff6d8', sunGlow: 'rgba(255,200,150,0.55)',
-    far: '#6a4a7a', near: '#33244d', windows: '#ffe3b3', dots: '#ffb08a',
-    dark: '#3a2a4a', light: '#ffd9c2',
-    caption: '#ffffff', outline: '#33244d', kicker: '#ffe3b3', accent: '#ffb08a',
+  grain: {
+    id: 'grain', name: 'Grain Reel', treatment: 'grain',
+    sky: [[0, '#241031'], [0.40, '#8a2f6d'], [0.70, '#ff8a4a'], [1.00, '#ffc46b']],
+    sun: '#ffe9a8', glow: 'rgba(255,140,60,0.55)',
+    far: '#38164e', near: '#150a24', windows: '#ffd166', dots: '#ff9e6b',
+    duoDark: '#261230', duoLight: '#ffb36b',
+    caption: '#ffffff', outline: '#1c0b2e', kicker: '#ffd166', accent: '#ff2e88',
     scrim: 'rgba(10,6,18,0.8)',
   },
 };
 
-// --- Layouts: panel rects as fractions of the cover. ---
-// photo: index into the photo list. treatment: per-panel photo treatment.
-// rotate: degrees on the accent panel only.
+export const GRADE_ORDER = ['vivid', 'duotone', 'halftone', 'clean', 'grain'];
+
+// Face anchors, measured from the kit samples: the boulevard face zone
+// runs y 0.03–0.35 and the pier face zone y 0.02–0.42, so the anchors sit
+// just below the top of each face and keep every head inside its panel
+// at landscape, portrait, and square alike.
+// A panel: fractions of the cover, a photo slot (0/1/2) or a drawn scene,
+// an anchor point (fractions of the photo) that the crop centres on, and
+// its label lines. Photo slots: 0 = first photo, 1 = second photo.
+function panel(x, y, w, h, photo, anchor, label, sub, scene = null) {
+  return { x, y, w, h, photo, anchor, label, sub, scene };
+}
+
 export const LAYOUTS = {
-  'hero-left': {
-    label: 'Hero + 3-Strip',
-    panels(w, h) {
-      const g = 0.018; // gutter, fraction of width
-      const heroW = 0.6;
-      const stripX = heroW + g;
-      const stripW = 1 - stripX;
-      const stripH = (1 - 0.22 - g * 2) / 3;
-      return [
-        { x: 0, y: 0, w: heroW, h: 0.78, photo: 0, treatment: 'duotone', rotate: 0 },
-        { x: stripX, y: 0, w: stripW, h: stripH, photo: 1, treatment: 'halftone', rotate: 0 },
-        { x: stripX, y: stripH + g, w: stripW, h: stripH, photo: 0, treatment: 'clean', rotate: 0 },
-        { x: stripX, y: (stripH + g) * 2, w: stripW, h: stripH, photo: 1, treatment: 'grain', rotate: 0 },
-      ];
-    },
+  'vice-hero': {
+    id: 'vice-hero', name: 'Vice Hero + Story',
+    panels: [
+      panel(0, 0, 0.52, 0.70, 0, [0.46, 0.19], 'OCEAN DRIVE', '6:42 PM — LOOKING FOR TROUBLE'),
+      panel(0.535, 0, 0.465, 0.3425, 1, [0.40, 0.22], 'PIER 26', '5:30 AM — GONE FISHING'),
+      panel(0.535, 0.3575, 0.465, 0.3425, null, null, 'MARINA DEL SOL', '7:48 PM — NO WITNESSES', 'marina'),
+    ],
   },
-  'hero-strip': {
-    label: 'Full-Bleed Hero + Strip',
-    panels(w, h) {
-      const g = 0.018;
-      const heroH = 0.66;
-      const stripY = heroH + g;
-      const stripH = 0.78 - stripY - g;
-      const stripW = (1 - g * 2) / 3;
-      return [
-        { x: 0, y: 0, w: 1, h: heroH, photo: 0, treatment: 'duotone', rotate: 0 },
-        { x: 0, y: stripY, w: stripW, h: stripH, photo: 1, treatment: 'halftone', rotate: 0 },
-        { x: stripW + g, y: stripY, w: stripW, h: stripH, photo: 0, treatment: 'clean', rotate: 0 },
-        { x: (stripW + g) * 2, y: stripY, w: stripW, h: stripH, photo: 1, treatment: 'grain', rotate: 0 },
-      ];
-    },
+  single: {
+    id: 'single', name: 'Single Hero',
+    panels: [
+      panel(0, 0, 1, 0.70, 0, [0.46, 0.19], 'OCEAN DRIVE', '6:42 PM — LOOKING FOR TROUBLE'),
+    ],
   },
-  diagonal: {
-    label: 'Diagonal Split',
-    panels(w, h) {
-      return [
-        { x: 0, y: 0, w: 1, h: 0.78, photo: 0, treatment: 'duotone', rotate: 0, clip: 'diag-a' },
-        { x: 0, y: 0, w: 1, h: 0.78, photo: 1, treatment: 'halftone', rotate: 0, clip: 'diag-b' },
-        { x: 0.68, y: 0.52, w: 0.3, h: 0.26, photo: 0, treatment: 'clean', rotate: -3 },
-      ];
-    },
+  duo: {
+    id: 'duo', name: 'Duo Split',
+    panels: [
+      panel(0, 0, 0.4925, 0.70, 0, [0.46, 0.19], 'OCEAN DRIVE', '6:42 PM — LOOKING FOR TROUBLE'),
+      panel(0.5075, 0, 0.4925, 0.70, 1, [0.40, 0.22], 'PIER 26', '5:30 AM — GONE FISHING'),
+    ],
+  },
+  filmstrip: {
+    id: 'filmstrip', name: 'Filmstrip',
+    panels: [
+      panel(0, 0, 0.58, 0.70, 0, [0.46, 0.19], 'OCEAN DRIVE', '6:42 PM — LOOKING FOR TROUBLE'),
+      panel(0.595, 0, 0.405, 0.2233, 1, [0.40, 0.22], 'PIER 26', '5:30 AM — GONE FISHING'),
+      panel(0.595, 0.2383, 0.405, 0.2233, null, null, 'MARINA DEL SOL', '7:48 PM — NO WITNESSES', 'marina'),
+      panel(0.595, 0.4767, 0.405, 0.2233, 0, [0.46, 0.19], 'PALM ROW', '9:15 PM — LIGHTS OUT'),
+    ],
   },
   grid: {
-    label: '2 x 2 Grid',
-    panels(w, h) {
-      const g = 0.018;
-      const cw = (1 - g) / 2;
-      const ch = (0.78 - g) / 2;
-      return [
-        { x: 0, y: 0, w: cw, h: ch, photo: 0, treatment: 'duotone', rotate: 0 },
-        { x: cw + g, y: 0, w: cw, h: ch, photo: 1, treatment: 'halftone', rotate: 0 },
-        { x: 0, y: ch + g, w: cw, h: ch, photo: 1, treatment: 'clean', rotate: 0 },
-        { x: cw + g, y: ch + g, w: cw, h: ch, photo: 0, treatment: 'grain', rotate: 0 },
-      ];
-    },
+    id: 'grid', name: 'Four Corners',
+    panels: [
+      panel(0, 0, 0.4925, 0.3425, 0, [0.46, 0.19], 'OCEAN DRIVE', '6:42 PM — LOOKING FOR TROUBLE'),
+      panel(0.5075, 0, 0.4925, 0.3425, 1, [0.40, 0.22], 'PIER 26', '5:30 AM — GONE FISHING'),
+      panel(0, 0.3575, 0.4925, 0.3425, null, null, 'MARINA DEL SOL', '7:48 PM — NO WITNESSES', 'marina'),
+      panel(0.5075, 0.3575, 0.4925, 0.3425, null, null, 'SKYLINE', '8:30 PM — BIG MONEY', 'backdrop'),
+    ],
   },
-  'center-hero': {
-    label: 'Center Hero + Flanks',
-    panels(w, h) {
-      const g = 0.018;
-      const flankW = 0.22;
-      const heroX = flankW + g;
-      const heroW = 1 - flankW * 2 - g * 2;
-      return [
-        { x: 0, y: 0, w: flankW, h: 0.78, photo: 1, treatment: 'halftone', rotate: 0 },
-        { x: heroX, y: 0, w: heroW, h: 0.78, photo: 0, treatment: 'duotone', rotate: 0 },
-        { x: heroX + heroW + g, y: 0, w: flankW, h: 0.78, photo: 1, treatment: 'clean', rotate: 0 },
-      ];
-    },
+  trio: {
+    id: 'trio', name: 'Three Columns',
+    panels: [
+      panel(0, 0, 0.3233, 0.70, 0, [0.46, 0.19], 'OCEAN DRIVE', '6:42 PM — LOOKING FOR TROUBLE'),
+      panel(0.3383, 0, 0.3233, 0.70, 1, [0.40, 0.22], 'PIER 26', '5:30 AM — GONE FISHING'),
+      panel(0.6767, 0, 0.3233, 0.70, null, null, 'MARINA DEL SOL', '7:48 PM — NO WITNESSES', 'marina'),
+    ],
   },
 };
 
-// --- Export sizes. ---
+export const LAYOUT_ORDER = ['vice-hero', 'single', 'duo', 'filmstrip', 'grid', 'trio'];
+
 export const SIZES = {
-  square: { label: 'Square 1080 x 1080', w: 1080, h: 1080 },
-  portrait: { label: 'Portrait 1080 x 1350', w: 1080, h: 1350 },
-  landscape: { label: 'Landscape 1920 x 1080', w: 1920, h: 1080 },
+  landscape: { w: 1920, h: 1080, label: 'Landscape 1920 × 1080' },
+  portrait: { w: 1080, h: 1350, label: 'Portrait 1080 × 1350' },
+  square: { w: 1080, h: 1080, label: 'Square 1080 × 1080' },
 };
 
-// --- Caption samples (own words; never the game's title). ---
-export const CAPTION_SAMPLES = [
-  { caption: 'NEON BOULEVARD', kicker: 'VICE CITY AFTER DARK' },
-  { caption: 'SUNSET HEIST', kicker: 'ONE LAST SCORE' },
-  { caption: 'PALM CITY HEAT', kicker: 'SUMMER NEVER ENDS' },
-  { caption: 'BOULEVARD QUEEN', kicker: 'SHE RUNS THIS TOWN' },
-  { caption: 'MIDNIGHT PIER', kicker: 'EVERY LIGHT A STORY' },
-];
-
-/** Seeded pick of layout + grade + caption for "Surprise me". */
-export function surprisePick(seed) {
-  let a = seed >>> 0;
-  const next = () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-  const layouts = Object.keys(LAYOUTS);
-  const grades = Object.keys(GRADES);
+export function defaultState() {
   return {
-    layout: layouts[Math.floor(next() * layouts.length)],
-    grade: grades[Math.floor(next() * grades.length)],
-    sample: CAPTION_SAMPLES[Math.floor(next() * CAPTION_SAMPLES.length)],
-    seed: Math.floor(next() * 100000),
+    layout: 'vice-hero',
+    grade: 'vivid',
+    caption: 'PALM CITY HEAT',
+    kicker: 'SUMMER NEVER ENDS',
+    script: 'Every light a story',
+    strip: 'SUMMER NEVER ENDS — SHOT ON YOUR OWN CAMERA',
+    seed: 42,
+    size: 'landscape',
+    // Per photo slot: zoom (never below 0.5) and pan offsets in photo fractions.
+    crops: [
+      { zoom: 1, panX: 0, panY: 0 },
+      { zoom: 1, panX: 0, panY: 0 },
+      { zoom: 1, panX: 0, panY: 0 },
+    ],
   };
 }

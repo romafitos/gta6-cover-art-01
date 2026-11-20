@@ -1,112 +1,52 @@
-// Photo treatment: duotone grade, halftone dot screen and film grain,
-// all computed on offscreen canvases with plain 2D compositing.
-// treatments: 'duotone' | 'halftone' | 'clean' | 'grain'
+// Seeded randomness and halftone dot fields. Everything drawn from a seed
+// is deterministic: the same seed paints the same dots every time, so a
+// cover rebuilt from the same state is byte-identical.
 
-/** Builds a reusable halftone dot tile (dark dots on transparent). */
-export function makeDotTile(size, radius, color) {
-  const tile = document.createElement('canvas');
-  tile.width = size;
-  tile.height = size;
-  const t = tile.getContext('2d');
-  t.fillStyle = color;
-  t.beginPath();
-  t.arc(size / 2, size / 2, radius, 0, Math.PI * 2);
-  t.fill();
-  return tile;
-}
-
-/** Grayscale + duotone: photo -> grey, then light colour screened over dark. */
-export function duotoneImage(img, w, h, dark, light) {
-  const c = document.createElement('canvas');
-  c.width = Math.max(2, Math.round(w));
-  c.height = Math.max(2, Math.round(h));
-  const x = c.getContext('2d');
-  // Cover-fit the photo into the frame.
-  const s = Math.max(c.width / img.naturalWidth, c.height / img.naturalHeight);
-  const pw = img.naturalWidth * s;
-  const ph = img.naturalHeight * s;
-  x.filter = 'grayscale(1) contrast(1.12) brightness(1.04)';
-  x.drawImage(img, (c.width - pw) / 2, (c.height - ph) / 2, pw, ph);
-  x.filter = 'none';
-  // Duotone: dark shadows, light highlights.
-  x.globalCompositeOperation = 'multiply';
-  x.fillStyle = light;
-  x.fillRect(0, 0, c.width, c.height);
-  x.globalCompositeOperation = 'screen';
-  x.fillStyle = dark;
-  x.fillRect(0, 0, c.width, c.height);
-  x.globalCompositeOperation = 'source-over';
-  return c;
-}
-
-/** Overlays a halftone dot screen whose dot size follows local brightness. */
-export function halftoneScreen(ctx, w, h, color, strength) {
-  const step = 9;
-  const tile = makeDotTile(step, 2.6, color);
-  const pattern = ctx.createPattern(tile, 'repeat');
-  ctx.save();
-  ctx.globalAlpha = strength;
-  ctx.fillStyle = pattern;
-  ctx.fillRect(0, 0, w, h);
-  ctx.restore();
-}
-
-/** Sparse monochrome grain: deterministic-ish speckle from a seed. */
-export function grainOverlay(ctx, w, h, seed, amount) {
-  let a = seed >>> 0;
-  const next = () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+// A tiny linear congruential generator; returns a function yielding
+// pseudo-random numbers in [0, 1). Seeded from the cover's seed plus a
+// per-field salt so different fields do not march in lockstep. The
+// constants are the classic Numerical Recipes pair, chosen because they
+// are stable across engines and easy to verify by hand.
+export function makeRng(seed, salt = 0) {
+  let s = (seed * 2654435761 + salt * 40503 + 12345) >>> 0;
+  return function next() {
+    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
+    return s / 4294967296;
   };
+}
+
+// Paints a field of halftone dots inside a rectangle. Dot radius grows
+// toward the bottom of the field (bigger dots = darker print feel). The
+// caller clips to the region it wants dotted.
+export function drawHalftone(ctx, x, y, w, h, step, colour, seed, minR = 1, maxR = 2.8) {
+  const rng = makeRng(seed, 77);
   ctx.save();
-  for (let i = 0; i < amount; i++) {
-    const v = next();
-    ctx.fillStyle = v > 0.5 ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)';
-    ctx.globalAlpha = 0.05 + next() * 0.09;
-    const s = 1 + next() * 2;
-    ctx.fillRect(next() * w, next() * h, s, s);
+  ctx.fillStyle = colour;
+  for (let row = 0, yy = y + step / 2; yy < y + h; yy += step, row++) {
+    for (let col = 0, xx = x + step / 2; xx < x + w; xx += step, col++) {
+      const t = h > 0 ? (yy - y) / h : 0;
+      const jitter = (rng() - 0.5) * step * 0.35;
+      const r = minR + (maxR - minR) * t * (0.6 + 0.8 * rng());
+      ctx.beginPath();
+      ctx.arc(xx + jitter, yy + (rng() - 0.5) * step * 0.2, r, 0, Math.PI * 2);
+      ctx.fill();
+    }
   }
   ctx.restore();
 }
 
-/**
- * Draws img into rect (x, y, w, h) with cover-fit crop, a per-panel zoom and
- * pan offsets, then applies the named treatment. zoom 1 = cover fit.
- * ox/oy are fractions of the frame the crop centre may shift by.
- */
-export function drawTreatedPhoto(ctx, img, x, y, w, h, treatment, dark, light, zoom, ox, oy, seed) {
-  if (!img || w <= 0 || h <= 0) return;
-  const z = Math.max(0.5, zoom || 1);
-  if (treatment === 'duotone' || treatment === 'halftone') {
-    const duo = duotoneImage(img, w, h, dark, light);
-    // Pan/zoom on the duotone result: draw it scaled around the centre.
-    const dw = w * z;
-    const dh = h * z;
-    ctx.drawImage(duo, x + (w - dw) / 2 + ox * w, y + (h - dh) / 2 + oy * h, dw, dh);
-  } else {
-    const s = Math.max(w / img.naturalWidth, h / img.naturalHeight) * z;
-    const pw = img.naturalWidth * s;
-    const ph = img.naturalHeight * s;
-    ctx.drawImage(img, x + (w - pw) / 2 + ox * w, y + (h - ph) / 2 + oy * h, pw, ph);
+// Speckles a rectangle with faint light/dark grain flecks (the grain
+// treatment's finish). Count scales with area so large panels stay even.
+export function drawGrain(ctx, x, y, w, h, seed, count = 0) {
+  const rng = makeRng(seed, 913);
+  const n = count || Math.floor((w * h) / 900);
+  ctx.save();
+  for (let i = 0; i < n; i++) {
+    const px = x + rng() * w;
+    const py = y + rng() * h;
+    const light = rng() > 0.5;
+    ctx.fillStyle = light ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.06)';
+    ctx.fillRect(px, py, 1 + rng() * 2, 1 + rng() * 2);
   }
-  if (treatment === 'halftone') {
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.clip();
-    halftoneScreen(ctx, w, h, dark, 0.5);
-    ctx.restore();
-  }
-  if (treatment === 'grain' || treatment === 'halftone') {
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(x, y, w, h);
-    ctx.clip();
-    ctx.translate(x, y);
-    grainOverlay(ctx, w, h, seed + 7, Math.round((w * h) / 900));
-    ctx.restore();
-  }
+  ctx.restore();
 }

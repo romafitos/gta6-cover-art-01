@@ -1,166 +1,192 @@
-// Procedural Vice City backdrop: gradient sky, sun disc with glow, seeded
-// skyline silhouette with lit windows, palm-tree silhouettes and a halftone
-// dot field. Everything is drawn with canvas 2D from a seed, so the same
-// seed always paints the same city. No image assets, no network.
-export function mulberry32(seed) {
-  let a = seed >>> 0;
-  return function next() {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
+// Procedural art: the seeded skyline backdrop and the marina scene panel.
+// Both are drawn entirely by canvas code from the grade palette and the
+// cover seed, so the same seed always paints the same picture. No photo
+// assets are involved, which is what makes the marina panel unique art
+// instead of a third copy of a photograph.
+
+import { drawHalftone, makeRng } from './halftone.js';
+
+function skyGradient(ctx, x, y, w, h, grade) {
+  const g = ctx.createLinearGradient(x, y, x, y + h);
+  for (const [stop, colour] of grade.sky) g.addColorStop(stop, colour);
+  ctx.fillStyle = g;
+  ctx.fillRect(x, y, w, h);
 }
 
-/** A palm silhouette: curved trunk plus a fan of drooping fronds. */
-export function drawPalm(ctx, x, y, s, color, rng) {
+// A sun disc with a warm glow and slatted bands cut across its lower half.
+// (cx, cy) and r are absolute canvas coordinates. The slats use the sky's
+// top colour so the sun reads as setting behind thin cloud bands.
+function drawSun(ctx, cx, cy, r, grade) {
+  const glow = ctx.createRadialGradient(cx, cy, r * 0.4, cx, cy, r * 3);
+  glow.addColorStop(0, grade.glow);
+  glow.addColorStop(1, 'rgba(255,140,60,0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(cx - r * 3, cy - r * 3, r * 6, r * 6);
   ctx.save();
-  ctx.translate(x, y);
-  ctx.scale(s, s);
-  ctx.strokeStyle = color;
-  ctx.fillStyle = color;
-  ctx.lineWidth = 7;
-  ctx.lineCap = 'round';
-  // Trunk: gentle S-curve leaning either way.
-  const lean = (rng() - 0.5) * 44;
   ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.quadraticCurveTo(lean * 0.4, -70, lean, -128);
-  ctx.stroke();
-  // Fronds fan out from the crown.
-  const crownX = lean;
-  const crownY = -128;
-  const fronds = 7;
-  for (let i = 0; i < fronds; i++) {
-    const a = (-Math.PI * 0.15) - (i / (fronds - 1)) * Math.PI * 0.7;
-    const len = 52 + rng() * 26;
-    const tipX = crownX + Math.cos(a) * len;
-    const tipY = crownY + Math.sin(a) * len * 0.55 + 26;
-    ctx.lineWidth = 5;
-    ctx.beginPath();
-    ctx.moveTo(crownX, crownY);
-    ctx.quadraticCurveTo(
-      crownX + Math.cos(a) * len * 0.55,
-      crownY + Math.sin(a) * len * 0.5 - 6,
-      tipX, tipY,
-    );
-    ctx.stroke();
-  }
-  // Coconuts: two small dots under the crown.
-  ctx.beginPath();
-  ctx.arc(crownX - 6, crownY + 6, 5, 0, Math.PI * 2);
-  ctx.arc(crownX + 7, crownY + 8, 5, 0, Math.PI * 2);
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.fillStyle = grade.sun;
   ctx.fill();
+  ctx.clip();
+  // Slats: horizontal bands of the sky's top colour, widening as they drop.
+  ctx.fillStyle = grade.sky[0][1];
+  let band = 2;
+  let yy = cy + r * 0.05;
+  while (yy < cy + r) {
+    ctx.fillRect(cx - r, yy, r * 2, band);
+    yy += band + 6;
+    band += 1.5;
+  }
   ctx.restore();
 }
 
-/** One row of skyline buildings with lit windows, drawn as silhouette. */
-export function drawSkylineRow(ctx, w, baseY, minH, maxH, color, windowColor, rng, windowsOn) {
-  let x = -10;
-  while (x < w + 10) {
-    const bw = 34 + rng() * 96;
+// One row of skyline silhouettes along a baseline. Buildings get seeded
+// widths and heights between minH and maxH; when windows is true, a few
+// lit windows are punched into each tower.
+function drawSkylineRow(ctx, x, yBase, w, minH, maxH, colour, grade, seed, salt, windows) {
+  const rng = makeRng(seed, salt);
+  let bx = x;
+  ctx.fillStyle = colour;
+  while (bx < x + w) {
+    const bw = w * (0.05 + rng() * 0.09);
     const bh = minH + rng() * (maxH - minH);
-    const top = baseY - bh;
-    ctx.fillStyle = color;
-    ctx.fillRect(x, top, bw, bh);
-    // Rooftop antenna on some towers.
-    if (rng() < 0.3) {
-      ctx.fillRect(x + bw * 0.5 - 2, top - 22 - rng() * 18, 4, 26);
-      ctx.fillStyle = windowColor;
-      ctx.beginPath();
-      ctx.arc(x + bw * 0.5, top - 24 - rng() * 16, 3, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.fillStyle = color;
-    }
-    // Lit windows: sparse grid, some dark.
-    if (windowsOn) {
-      ctx.fillStyle = windowColor;
-      const cols = Math.max(1, Math.floor(bw / 18));
-      const rows = Math.max(1, Math.floor(bh / 22));
+    ctx.fillRect(bx, yBase - bh, bw, bh);
+    if (windows) {
+      const cols = Math.max(1, Math.floor(bw / 14));
+      const rows = Math.max(1, Math.floor(bh / 20));
+      ctx.fillStyle = grade.windows;
       for (let c = 0; c < cols; c++) {
         for (let r = 0; r < rows; r++) {
-          if (rng() < 0.42) {
-            ctx.globalAlpha = 0.35 + rng() * 0.6;
-            ctx.fillRect(x + 6 + c * 18, top + 8 + r * 22, 8, 11);
+          if (rng() > 0.62) {
+            ctx.fillRect(bx + 4 + c * 14, yBase - bh + 6 + r * 20, 5, 7);
           }
         }
       }
-      ctx.globalAlpha = 1;
+      ctx.fillStyle = colour;
     }
-    x += bw + 2 + rng() * 14;
+    bx += bw + w * 0.008;
   }
 }
 
-/** Halftone dot field fading toward the bottom of a band. */
-export function drawHalftoneField(ctx, x, y, w, h, dotColor, rng) {
-  const step = 14;
-  for (let gy = 0; gy < h; gy += step) {
-    for (let gx = 0; gx < w; gx += step) {
-      const fade = gy / h;
-      const r = 1 + fade * 4.2 + rng() * 0.8;
-      ctx.fillStyle = dotColor;
-      ctx.globalAlpha = 0.16 + fade * 0.5;
-      ctx.beginPath();
-      ctx.arc(x + gx + step / 2, y + gy + step / 2, r, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  ctx.globalAlpha = 1;
-}
-
-/**
- * Paints the full backdrop on ctx at size w x h.
- * palette: { sky:[...stops], sun, sunGlow, far, near, windows, dots, horizon }
- */
-export function drawBackdrop(ctx, w, h, seed, palette) {
-  const rng = mulberry32(seed);
-  // Sky gradient.
-  const sky = ctx.createLinearGradient(0, 0, 0, h);
-  palette.sky.forEach(([stop, color]) => sky.addColorStop(stop, color));
-  ctx.fillStyle = sky;
-  ctx.fillRect(0, 0, w, h);
-  // Sun disc + glow, placed upper third, slightly off-centre.
-  const sunX = w * (0.62 + rng() * 0.1);
-  const sunY = h * 0.3;
-  const sunR = Math.min(w, h) * 0.13;
-  const glow = ctx.createRadialGradient(sunX, sunY, sunR * 0.2, sunX, sunY, sunR * 3.2);
-  glow.addColorStop(0, palette.sunGlow);
-  glow.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = glow;
-  ctx.fillRect(0, 0, w, h);
-  ctx.fillStyle = palette.sun;
-  ctx.beginPath();
-  ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
-  ctx.fill();
-  // Sun slats: thin sky-coloured bands across the lower half of the sun.
+// A palm silhouette: a leaning trunk and five drooping fronds.
+export function drawPalm(ctx, x, yBase, height, colour, width = 2) {
   ctx.save();
+  ctx.strokeStyle = colour;
+  ctx.fillStyle = colour;
+  ctx.lineWidth = Math.max(2, width);
+  ctx.lineCap = 'round';
+  const lean = height * 0.12;
   ctx.beginPath();
-  ctx.arc(sunX, sunY, sunR, 0, Math.PI * 2);
-  ctx.clip();
-  ctx.fillStyle = palette.sky[0][1];
-  let sy = sunY + sunR * 0.05;
-  let band = 3;
-  while (sy < sunY + sunR) {
-    ctx.fillRect(sunX - sunR, sy, sunR * 2, band);
-    sy += band + 9;
-    band += 2;
+  ctx.moveTo(x, yBase);
+  ctx.quadraticCurveTo(x + lean * 0.4, yBase - height * 0.55, x + lean, yBase - height);
+  ctx.stroke();
+  const topX = x + lean;
+  const topY = yBase - height;
+  for (let i = 0; i < 5; i++) {
+    const spread = -0.9 + i * 0.45;
+    const len = height * (0.42 - Math.abs(spread) * 0.12);
+    ctx.beginPath();
+    ctx.moveTo(topX, topY);
+    ctx.quadraticCurveTo(
+      topX + Math.sin(spread) * len * 0.7, topY - Math.cos(spread) * len * 0.35,
+      topX + Math.sin(spread) * len, topY + len * 0.45,
+    );
+    ctx.stroke();
   }
   ctx.restore();
-  // Far skyline, then near skyline, both silhouettes.
-  const horizon = h * 0.78;
-  drawSkylineRow(ctx, w, horizon, h * 0.1, h * 0.24, palette.far, palette.windows, rng, false);
-  drawSkylineRow(ctx, w, horizon + h * 0.04, h * 0.16, h * 0.34, palette.near, palette.windows, rng, true);
-  // Ground band.
-  ctx.fillStyle = palette.near;
-  ctx.fillRect(0, horizon + h * 0.04, w, h - horizon);
-  // Palms along the ground line, a few tall ones framing the edges.
-  const palmCount = 5 + Math.floor(rng() * 3);
-  for (let i = 0; i < palmCount; i++) {
-    const px = (i / (palmCount - 1)) * w + (rng() - 0.5) * 60;
-    const ps = (0.5 + rng() * 0.7) * (h / 900);
-    drawPalm(ctx, px, horizon + h * 0.05 + rng() * 8, ps, palette.near, rng);
+}
+
+// The full backdrop: gradient sky, slatted sun, two skyline rows, a ground
+// band, palms at the edges, and a halftone dot field across the sky.
+export function drawBackdrop(ctx, x, y, w, h, grade, seed) {
+  skyGradient(ctx, x, y, w, h, grade);
+  drawSun(ctx, x + w * 0.5, y + h * 0.42, h * 0.16, grade);
+  const groundY = y + h * 0.78;
+  drawSkylineRow(ctx, x, groundY, w, h * 0.08, h * 0.20, grade.far, grade, seed, 11, false);
+  drawSkylineRow(ctx, x, groundY + h * 0.03, w, h * 0.12, h * 0.26, grade.near, grade, seed, 23, true);
+  ctx.fillStyle = grade.near;
+  ctx.fillRect(x, groundY + h * 0.03, w, y + h - (groundY + h * 0.03));
+  drawPalm(ctx, x + w * 0.06, y + h * 0.98, h * 0.22, grade.near, Math.max(2, h * 0.008));
+  drawPalm(ctx, x + w * 0.94, y + h * 0.98, h * 0.20, grade.near, Math.max(2, h * 0.008));
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y + h * 0.10, w, h * 0.45);
+  ctx.clip();
+  drawHalftone(ctx, x, y + h * 0.10, w, h * 0.45, 14, grade.dots, seed, 1, 2.4);
+  ctx.restore();
+}
+
+// The marina scene: the one panel no winner has. Sky and sun up top, a
+// two-row skyline down to a waterline, a dark water band with a gold sun
+// reflection made of narrowing dashes, two sailboat silhouettes, and a
+// halftone field across the sky band.
+export function drawMarinaScene(ctx, x, y, w, h, grade, seed) {
+  const waterline = y + h * 0.70;
+  skyGradient(ctx, x, y, w, h * 0.70, grade);
+  drawSun(ctx, x + w * 0.68, y + h * 0.46, h * 0.17, grade);
+  drawSkylineRow(ctx, x, waterline, w, h * 0.08, h * 0.20, grade.far, grade, seed, 31, false);
+  drawSkylineRow(ctx, x, waterline + h * 0.03, w, h * 0.12, h * 0.26, grade.near, grade, seed, 47, true);
+  const water = ctx.createLinearGradient(0, waterline, 0, y + h);
+  water.addColorStop(0, '#14324a');
+  water.addColorStop(1, '#081826');
+  ctx.fillStyle = water;
+  ctx.fillRect(x, waterline, w, y + h - waterline);
+  // Sun reflection: gold dashes under the sun, narrowing as they descend.
+  const rng = makeRng(seed, 59);
+  const sunX = x + w * 0.68;
+  let dashW = h * 0.17 * 0.9;
+  let ry = waterline + h * 0.02;
+  ctx.fillStyle = 'rgba(255,200,110,0.55)';
+  while (ry < y + h - h * 0.02 && dashW > 2) {
+    const jitter = (rng() - 0.5) * dashW * 0.3;
+    ctx.fillRect(sunX - dashW / 2 + jitter, ry, dashW, Math.max(2, h * 0.012));
+    dashW *= 0.92;
+    ry += h * 0.045;
   }
-  // Halftone dots across the lower sky band.
-  drawHalftoneField(ctx, 0, h * 0.52, w, h * 0.26, palette.dots, rng);
+  // Sailboats: hull trapezoid, mast, two triangular sails. Both boats
+  // sit right of the label pill: the pill spans up to ~0.56 of the panel
+  // width at portrait size, and boats at the spec's 0.22/0.44 hid behind
+  // it (only mast tips poked out). 0.63 and 0.85 clear it at all sizes.
+  drawSailboat(ctx, x + w * 0.63, waterline + h * 0.13, h / 380);
+  drawSailboat(ctx, x + w * 0.85, waterline + h * 0.19, h / 460);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y + h * 0.28, w, h * 0.30);
+  ctx.clip();
+  drawHalftone(ctx, x, y + h * 0.28, w, h * 0.30, 14, grade.dots, seed, 1, 2.4);
+  ctx.restore();
+}
+
+function drawSailboat(ctx, bx, by, s) {
+  ctx.save();
+  ctx.fillStyle = '#0d0616';
+  ctx.strokeStyle = '#0d0616';
+  // Hull: a trapezoid, wider at the top edge.
+  ctx.beginPath();
+  ctx.moveTo(bx - 26 * s, by - 6 * s);
+  ctx.lineTo(bx + 26 * s, by - 6 * s);
+  ctx.lineTo(bx + 18 * s, by + 6 * s);
+  ctx.lineTo(bx - 18 * s, by + 6 * s);
+  ctx.closePath();
+  ctx.fill();
+  // Mast.
+  ctx.lineWidth = Math.max(1, 2 * s);
+  ctx.beginPath();
+  ctx.moveTo(bx, by - 6 * s);
+  ctx.lineTo(bx, by - 52 * s);
+  ctx.stroke();
+  // Two sails: a tall triangle ahead of the mast, a shorter one behind.
+  ctx.beginPath();
+  ctx.moveTo(bx + 2 * s, by - 50 * s);
+  ctx.lineTo(bx + 2 * s, by - 10 * s);
+  ctx.lineTo(bx + 24 * s, by - 10 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.beginPath();
+  ctx.moveTo(bx - 2 * s, by - 46 * s);
+  ctx.lineTo(bx - 2 * s, by - 10 * s);
+  ctx.lineTo(bx - 18 * s, by - 10 * s);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 }

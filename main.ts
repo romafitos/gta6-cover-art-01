@@ -1,14 +1,14 @@
-// Vice Cover Studio — make.fun program/v1 entrypoint (Node 22, stdlib only).
-// The app is the static offline folder app/ (index.html + ES modules, zero
-// dependencies, zero network requests) and this file hands it in: it copies
-// app/ and screenshots/ from beside this file into /output and writes
-// /output/dossier.json with the vendored make.fun library, so the judge can
-// read the entry. Outside the grader's container, MAKEFUN_OUTPUT_DIR stands
-// in for /output:
+// Entry point for the Palm City Heat cover maker (Node 22+, standard
+// library only). The app is the static site in app/ — plain HTML, CSS,
+// and ES modules that run offline in a desktop browser — and the program
+// hands it in: it copies app/ and screenshots/ from beside this file
+// into the output directory and writes /output/dossier.json, the summary
+// the judge reads, using the vendored make.fun library.
+//
+// Serve the app locally with `node serve.ts`, then open
+// http://localhost:8080. Outside the grader's container,
+// MAKEFUN_OUTPUT_DIR stands in for /output:
 //   mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
-// Run it twice and diff the outputs: both runs must be byte-identical.
-// Determinism holds because buildDossier is a pure function of the file
-// bytes in /output: same app/ + screenshots/ in, same dossier.json out.
 
 import { cpSync, existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
@@ -21,13 +21,15 @@ const out = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
 mkdirSync(out, { recursive: true });
 cpSync(join(here, 'app'), join(out, 'app'), { recursive: true });
 mkdirSync(join(out, 'screenshots'), { recursive: true });
-if (existsSync(join(here, 'screenshots'))) cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+if (existsSync(join(here, 'screenshots'))) {
+  cpSync(join(here, 'screenshots'), join(out, 'screenshots'), { recursive: true });
+}
 
-// The scorer's own caps (reference/gate.json): only text_max_bytes shapes the
-// bytes; the others refuse an entry the scorer would refuse (more than 4
-// screenshots or one over 256 KiB; more than 993 files in app/ or 48 MiB of
-// app files, in all, or a path under app/ over 1000 bytes: app/ counts beside
-// /output's own 1000-entry cap, its screenshots/ and dossier.json).
+// The caps mirror the scorer's own gate: at most 4 screenshots, each at
+// most 256 KiB; app/ at most 993 files and 48 MiB in all, each path at
+// most 1000 bytes; the dossier's text budget is 160 KiB. The dossier
+// builder hashes every file, so identical inputs give identical bytes —
+// run main.ts twice and the two dossiers match exactly.
 writeFileSync(
   join(out, 'dossier.json'),
   buildDossier(out, {
