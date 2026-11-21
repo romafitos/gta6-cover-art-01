@@ -1,169 +1,221 @@
-// The compositor: paints one cover onto a canvas from the shared state
-// and the loaded photos. The preview canvas and the PNG export both go
-// through this one function, so what is seen is what the file holds.
+// The compositor: paints one cover onto a canvas from the shared
+// state and the loaded photos. The preview canvas and the PNG export
+// both go through this one function, so what is seen is what the
+// file holds.
 //
-// Panel order: photos (or drawn scenes) first, then panel borders and
-// labels, then the title band with its quote/title/script/chip/ribbon,
-// then the WANTED pill and EST. seal, then the bottom strip.
+// Paint order: photos (or drawn scenes) first, then panel borders
+// and labels, then the title band, the badges, and the bottom strip.
+// Every photograph draw uses anchor cropping: the photo's anchor
+// point lands at the panel centre, then the draw is clamped so the
+// panel stays fully covered, which keeps faces whole at every size.
+import { layoutFor, gradeFor } from './presets.js';
+import { drawBackdrop, drawMarinaScene, drawSkylineScene } from './skyline.js';
+import { drawTitleBand, drawPanelLabel, drawBadges, drawStrip } from './lettering.js';
+import { makeRng } from './halftone.js';
 
-import { GRADES, LAYOUTS } from './presets.js';
-import { drawGrain, drawHalftone } from './halftone.js';
-import { drawBackdrop, drawMarinaScene } from './skyline.js';
-import {
-  drawEstSeal, drawPanelLabel, drawRibbon, drawStrip, drawTitleBand,
-  drawVolChip, drawWantedPill,
-} from './lettering.js';
-
-// Anchor crop: the photo point (ax, ay) lands on the panel centre, then
-// the drawn image is clamped so the panel stays fully covered. Pan
-// offsets shift the image on top of the anchor; zoom never goes below 0.5.
-// The clamp is what keeps wide-short panels from ever showing a gap at
-// an edge, and the anchor is what keeps faces inside the frame.
-function anchorDraw(ctx, photo, px, py, pw, ph, anchor, crop) {
-  const zoom = Math.max(0.5, crop?.zoom ?? 1);
-  const scale = Math.max(pw / photo.naturalWidth, ph / photo.naturalHeight) * zoom;
-  const dw = photo.naturalWidth * scale;
-  const dh = photo.naturalHeight * scale;
-  let dx = px + pw / 2 - anchor[0] * dw + (crop?.panX ?? 0) * pw;
-  let dy = py + ph / 2 - anchor[1] * dh + (crop?.panY ?? 0) * ph;
-  dx = Math.min(px, Math.max(px + pw - dw, dx));
-  dy = Math.min(py, Math.max(py + ph - dh, dy));
-  ctx.drawImage(photo, dx, dy, dw, dh);
+// Anchor crop: returns the draw offset for an image of (iw, ih)
+// cover-fitted into a panel of (pw, ph), with the anchor point
+// (ax, ay, fractions of the image) placed at the panel centre,
+// clamped so no edge of the panel shows through. `zoom` scales
+// the fitted image (>= 0.5); `pan` shifts it in fractions of the
+// panel after the anchor is placed.
+export function anchorOffset(iw, ih, pw, ph, ax, ay, zoom = 1, panX = 0, panY = 0) {
+  const base = Math.max(pw / iw, ph / ih);
+  const scale = base * Math.max(0.5, zoom);
+  const dw = iw * scale;
+  const dh = ih * scale;
+  let ox = pw / 2 - ax * dw + panX * pw;
+  let oy = ph / 2 - ay * dh + panY * ph;
+  ox = Math.min(0, Math.max(pw - dw, ox));
+  oy = Math.min(0, Math.max(ph - dh, oy));
+  return { ox, oy, dw, dh };
 }
 
-function drawPhotoPanel(ctx, photo, px, py, pw, ph, anchor, crop, grade) {
+// The vivid treatment, in order: a saturating filter, a warm
+// split-tone overlay, a soft-light teal shadow lift, and a radial
+// vignette. Drawn onto an offscreen canvas the size of the panel.
+function vividLayer(ctx, img, pw, ph, off, grade) {
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(pw));
+  c.height = Math.max(1, Math.round(ph));
+  const g = c.getContext('2d');
+  g.filter = 'saturate(1.62) contrast(1.20) brightness(1.04)';
+  g.drawImage(img, off.ox, off.oy, off.dw, off.dh);
+  g.filter = 'none';
+  // Warm split-tone: orange at the top fading out by mid-height,
+  // pink at the foot, overlay blend.
+  const warm = g.createLinearGradient(0, 0, 0, ph);
+  warm.addColorStop(0, 'rgba(255,140,60,0.16)');
+  warm.addColorStop(0.55, 'rgba(255,140,60,0.02)');
+  warm.addColorStop(1, 'rgba(255,46,136,0.18)');
+  g.globalCompositeOperation = 'overlay';
+  g.fillStyle = warm;
+  g.fillRect(0, 0, pw, ph);
+  // Teal shadow lift, soft-light.
+  g.globalCompositeOperation = 'soft-light';
+  g.fillStyle = 'rgba(0,229,255,0.10)';
+  g.fillRect(0, 0, pw, ph);
+  g.globalCompositeOperation = 'source-over';
+  // Radial vignette, darkening the panel edges.
+  const vig = g.createRadialGradient(pw / 2, ph / 2, 0.42 * Math.min(pw, ph), pw / 2, ph / 2, 0.75 * Math.max(pw, ph));
+  vig.addColorStop(0, 'rgba(10,6,18,0)');
+  vig.addColorStop(1, 'rgba(10,6,18,0.20)');
+  g.fillStyle = vig;
+  g.fillRect(0, 0, pw, ph);
+  ctx.drawImage(c, 0, 0);
+}
+
+// Duotone: the photo is drawn with the same anchor crop into an
+// offscreen canvas, converted to grey, then tinted between the
+// grade's dark and light pair.
+function duotoneLayer(ctx, img, pw, ph, off, grade) {
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(pw));
+  c.height = Math.max(1, Math.round(ph));
+  const g = c.getContext('2d');
+  g.drawImage(img, off.ox, off.oy, off.dw, off.dh);
+  const data = g.getImageData(0, 0, c.width, c.height);
+  const px = data.data;
+  const dark = hexRgb(grade.duoDark);
+  const light = hexRgb(grade.duoLight);
+  for (let i = 0; i < px.length; i += 4) {
+    const grey = (px[i] * 0.299 + px[i + 1] * 0.587 + px[i + 2] * 0.114) / 255;
+    px[i] = dark[0] + (light[0] - dark[0]) * grey;
+    px[i + 1] = dark[1] + (light[1] - dark[1]) * grey;
+    px[i + 2] = dark[2] + (light[2] - dark[2]) * grey;
+  }
+  g.putImageData(data, 0, 0);
+  ctx.drawImage(c, 0, 0);
+}
+
+function hexRgb(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+// Halftone treatment: the photo, then a dot field over the sky
+// band; grain: the photo plus seeded monochrome speckle.
+function halftoneLayer(ctx, img, pw, ph, off, grade, seed) {
+  ctx.drawImage(img, off.ox, off.oy, off.dw, off.dh);
+  const rng = makeRng(seed + 53);
   ctx.save();
-  ctx.beginPath();
-  ctx.rect(px, py, pw, ph);
-  ctx.clip();
-  const treatment = grade.treatment;
-  if (treatment === 'duotone') {
-    // Grey first (same anchor crop, on an offscreen canvas), then a
-    // two-colour overlay tint so the photograph reads as a duotone.
-    const off = document.createElement('canvas');
-    off.width = Math.max(2, Math.round(pw));
-    off.height = Math.max(2, Math.round(ph));
-    const octx = off.getContext('2d');
-    octx.filter = 'grayscale(1) contrast(1.08)';
-    anchorDraw(octx, photo, 0, 0, pw, ph, anchor, crop);
-    octx.filter = 'none';
-    ctx.drawImage(off, px, py, pw, ph);
-    const tint = ctx.createLinearGradient(px, py, px, py + ph);
-    tint.addColorStop(0, grade.duoLight);
-    tint.addColorStop(1, grade.duoDark);
-    ctx.globalCompositeOperation = 'overlay';
-    ctx.globalAlpha = 0.85;
-    ctx.fillStyle = tint;
-    ctx.fillRect(px, py, pw, ph);
-    ctx.globalAlpha = 1;
-    ctx.globalCompositeOperation = 'source-over';
-  } else if (treatment === 'vivid') {
-    ctx.filter = 'saturate(1.62) contrast(1.20) brightness(1.04)';
-    anchorDraw(ctx, photo, px, py, pw, ph, anchor, crop);
-    ctx.filter = 'none';
-    // Warm split-tone: orange at the top fading out mid-panel, pink at
-    // the foot, laid over the photograph in overlay blend mode.
-    const warm = ctx.createLinearGradient(px, py, px, py + ph);
-    warm.addColorStop(0, 'rgba(255,140,60,0.16)');
-    warm.addColorStop(0.55, 'rgba(255,140,60,0.02)');
-    warm.addColorStop(1, 'rgba(255,46,136,0.18)');
-    ctx.globalCompositeOperation = 'overlay';
-    ctx.fillStyle = warm;
-    ctx.fillRect(px, py, pw, ph);
-    // Teal shadow lift so the sea and sky keep their own hue.
-    ctx.globalCompositeOperation = 'soft-light';
-    ctx.fillStyle = 'rgba(0,229,255,0.10)';
-    ctx.fillRect(px, py, pw, ph);
-    ctx.globalCompositeOperation = 'source-over';
-    // Gentle radial vignette darkening the panel edges.
-    const vig = ctx.createRadialGradient(
-      px + pw / 2, py + ph / 2, Math.min(pw, ph) * 0.42,
-      px + pw / 2, py + ph / 2, Math.max(pw, ph) * 0.75,
-    );
-    vig.addColorStop(0, 'rgba(10,6,18,0)');
-    vig.addColorStop(1, 'rgba(10,6,18,0.20)');
-    ctx.fillStyle = vig;
-    ctx.fillRect(px, py, pw, ph);
-  } else {
-    anchorDraw(ctx, photo, px, py, pw, ph, anchor, crop);
-    if (treatment === 'halftone') {
-      drawHalftone(ctx, px, py, pw, ph, 7, 'rgba(10,6,18,0.18)', 5, 0.8, 2.2);
-    } else if (treatment === 'grain') {
-      drawGrain(ctx, px, py, pw, ph, 7);
+  ctx.fillStyle = grade.dots;
+  for (let gy = 4; gy < ph * 0.4; gy += 9) {
+    for (let gx = 4; gx < pw; gx += 9) {
+      ctx.beginPath();
+      ctx.arc(gx + (rng() - 0.5) * 3, gy + (rng() - 0.5) * 3, 1 + rng() * 1.6, 0, Math.PI * 2);
+      ctx.fill();
     }
   }
   ctx.restore();
 }
 
+function grainLayer(ctx, img, pw, ph, off, seed) {
+  ctx.drawImage(img, off.ox, off.oy, off.dw, off.dh);
+  const rng = makeRng(seed + 97);
+  ctx.save();
+  for (let i = 0; i < pw * ph * 0.0006; i++) {
+    const v = rng() < 0.5 ? 0 : 255;
+    ctx.fillStyle = `rgba(${v},${v},${v},0.08)`;
+    ctx.fillRect(rng() * pw, rng() * ph, 1.5, 1.5);
+  }
+  ctx.restore();
+}
+
+// Draws one photo panel with its treatment, then its border.
+function drawPhotoPanel(ctx, img, panel, W, H, grade, seed, crop) {
+  const px = panel.x * W;
+  const py = panel.y * H;
+  const pw = panel.w * W;
+  const ph = panel.h * H;
+  const zoom = crop?.zoom ?? 1;
+  const panX = crop?.panX ?? 0;
+  const panY = crop?.panY ?? 0;
+  const off = anchorOffset(img.naturalWidth, img.naturalHeight, pw, ph, panel.anchor[0], panel.anchor[1], zoom, panX, panY);
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(px, py, pw, ph);
+  ctx.clip();
+  ctx.translate(px, py);
+  const treatment = panel.treatment || 'clean';
+  if (treatment === 'vivid') vividLayer(ctx, img, pw, ph, off, grade);
+  else if (treatment === 'duotone') duotoneLayer(ctx, img, pw, ph, off, grade);
+  else if (treatment === 'halftone') halftoneLayer(ctx, img, pw, ph, off, grade, seed);
+  else if (treatment === 'grain') grainLayer(ctx, img, pw, ph, off, seed);
+  else ctx.drawImage(img, off.ox, off.oy, off.dw, off.dh);
+  ctx.restore();
+  // Panel border: a dark outer line plus a thin bright inner line.
+  ctx.save();
+  ctx.strokeStyle = 'rgba(10,6,18,0.9)';
+  ctx.lineWidth = Math.max(3, 0.005 * W);
+  ctx.strokeRect(px, py, pw, ph);
+  ctx.strokeStyle = 'rgba(255,243,214,0.55)';
+  ctx.lineWidth = Math.max(1, 0.0012 * W);
+  ctx.strokeRect(px + 3, py + 3, pw - 6, ph - 6);
+  ctx.restore();
+}
+
+// Draws one procedural scene panel with its border.
+function drawScenePanel(ctx, panel, W, H, grade, seed) {
+  const px = panel.x * W;
+  const py = panel.y * H;
+  const pw = panel.w * W;
+  const ph = panel.h * H;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(px, py, pw, ph);
+  ctx.clip();
+  if (panel.scene === 'marina') drawMarinaScene(ctx, px, py, pw, ph, grade, seed);
+  else drawSkylineScene(ctx, px, py, pw, ph, grade, seed);
+  ctx.restore();
+  ctx.save();
+  ctx.strokeStyle = 'rgba(10,6,18,0.9)';
+  ctx.lineWidth = Math.max(3, 0.005 * W);
+  ctx.strokeRect(px, py, pw, ph);
+  ctx.strokeStyle = 'rgba(255,243,214,0.55)';
+  ctx.lineWidth = Math.max(1, 0.0012 * W);
+  ctx.strokeRect(px + 3, py + 3, pw - 6, ph - 6);
+  ctx.restore();
+}
+
+// The single entry point for preview and export alike.
+// `photos` is an array of loaded images indexed by photo slot;
+// missing slots fall back to the drawn backdrop.
 export function drawCover(canvas, state, photos) {
   const ctx = canvas.getContext('2d');
   const W = canvas.width;
   const H = canvas.height;
-  const U = Math.min(W, H);
-  const grade = GRADES[state.grade] || GRADES.vivid;
-  const layout = LAYOUTS[state.layout] || LAYOUTS['vice-hero'];
-  const seed = state.seed | 0;
-
+  const grade = gradeFor(state.grade);
+  const layout = layoutFor(state.layout);
+  ctx.save();
   ctx.clearRect(0, 0, W, H);
-  ctx.fillStyle = '#0d0616';
-  ctx.fillRect(0, 0, W, H);
-
-  for (const p of layout.panels) {
-    const px = p.x * W;
-    const py = p.y * H;
-    const pw = p.w * W;
-    const ph = p.h * H;
-    if (p.scene === 'marina') {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(px, py, pw, ph);
-      ctx.clip();
-      drawMarinaScene(ctx, px, py, pw, ph, grade, seed);
-      ctx.restore();
-    } else if (p.scene === 'backdrop') {
-      ctx.save();
-      ctx.beginPath();
-      ctx.rect(px, py, pw, ph);
-      ctx.clip();
-      drawBackdrop(ctx, px, py, pw, ph, grade, seed);
-      ctx.restore();
+  // Backdrop behind everything (visible only in gaps, if any).
+  drawBackdrop(ctx, 0, 0, W, H * 0.70, grade, state.seed);
+  // Panels first, labels second so no label is ever painted over.
+  for (const panel of layout.panels) {
+    if (panel.scene) {
+      drawScenePanel(ctx, panel, W, H, grade, state.seed);
     } else {
-      const photo = photos[p.photo] || null;
-      if (photo) {
-        drawPhotoPanel(ctx, photo, px, py, pw, ph, p.anchor, state.crops[p.photo], grade);
-      } else {
-        ctx.save();
-        ctx.beginPath();
-        ctx.rect(px, py, pw, ph);
-        ctx.clip();
-        drawBackdrop(ctx, px, py, pw, ph, grade, seed);
-        ctx.restore();
-      }
+      const img = photos?.[panel.photo];
+      if (img) drawPhotoPanel(ctx, img, panel, W, H, grade, state.seed, state.crops?.[panel.photo]);
+      else drawScenePanel(ctx, { ...panel, scene: 'skyline' }, W, H, grade, state.seed);
     }
-    // Panel borders: dark outer line, thin bright inner line.
-    ctx.save();
-    ctx.lineWidth = Math.max(3, W * 0.005);
-    ctx.strokeStyle = '#0d0616';
-    ctx.strokeRect(px, py, pw, ph);
-    ctx.lineWidth = Math.max(1, W * 0.0012);
-    ctx.strokeStyle = 'rgba(255,233,168,0.55)';
-    ctx.strokeRect(px + 3, py + 3, pw - 6, ph - 6);
-    ctx.restore();
-    drawPanelLabel(ctx, px, py, pw, ph, p.label, p.sub);
   }
-
-  drawTitleBand(ctx, W, H, U, grade, state, seed);
-  drawWantedPill(ctx, W, H, U);
-  drawEstSeal(ctx, W, H, U);
-  drawStrip(ctx, W, H, U, state);
+  for (const panel of layout.panels) drawPanelLabel(ctx, panel, W, H, grade);
+  drawTitleBand(ctx, W, H, state, grade);
+  if (layout.badges) drawBadges(ctx, W, H, state, grade);
+  drawStrip(ctx, W, H, state, grade);
+  ctx.restore();
 }
 
-// Renders the cover at an arbitrary size into a fresh canvas and returns
-// it, so exports do not disturb the preview canvas.
-export function renderCover(width, height, state, photos) {
-  const canvas = document.createElement('canvas');
-  canvas.width = width;
-  canvas.height = height;
-  drawCover(canvas, state, photos);
-  return canvas;
+// Pixel rectangles of a layout's panels at a given cover size, for
+// the editor's crop controls and for headless verification.
+export function panelRects(state, W, H) {
+  return layoutFor(state.layout).panels.map((p) => ({
+    label: p.label,
+    x: Math.round(p.x * W),
+    y: Math.round(p.y * H),
+    w: Math.round(p.w * W),
+    h: Math.round(p.h * H),
+  }));
 }

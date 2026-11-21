@@ -1,223 +1,196 @@
-// Editor wiring: photo upload, sample loading, layout/grade/size pickers,
-// word fields, per-panel crop controls, surprise-me, and PNG export.
-// The preview canvas and every export render through the same compositor
-// (cover.js), so the preview is the export. A headless hook,
-// window.__renderExport(w, h), renders the current state at any size
-// and returns a PNG data URL; window.__viceCoverState exposes the state
-// for inspection.
+// Editor wiring: photo upload, sample loading, layout/grade/size
+// pickers, word fields, per-panel crop controls, surprise-me, and
+// PNG export. The preview canvas and every export render through
+// the same compositor (cover.js), so the preview is the export.
+// A headless hook, window.__renderExport(w, h), renders the current
+// state at any size and returns a PNG data URL, and window.__state
+// exposes the state for inspection.
+import { drawCover, panelRects } from './cover.js';
+import { runShot, ensureFontsForEditor } from './shots.js';
+import { GRADES, LAYOUTS, SIZES, CHAMPION } from './presets.js';
 
-import { drawCover, renderCover } from './cover.js';
-import { GRADE_ORDER, GRADES, LAYOUT_ORDER, LAYOUTS, SIZES, defaultState } from './presets.js';
-import { loadFontsExplicitly, runShot } from './shots.js';
-
-const state = defaultState();
-const photos = [null, null, null];
 const canvas = document.getElementById('cover');
 const status = document.getElementById('status');
+const sizeNote = document.getElementById('size-note');
 
-function $(id) {
-  return document.getElementById(id);
-}
+export const state = {
+  layout: CHAMPION.layout,
+  grade: CHAMPION.grade,
+  size: CHAMPION.size,
+  caption: CHAMPION.caption,
+  kicker: CHAMPION.kicker,
+  script: CHAMPION.script,
+  strip: CHAMPION.strip,
+  seed: CHAMPION.seed,
+  crops: { 0: { zoom: 1, panX: 0, panY: 0 }, 1: { zoom: 1, panX: 0, panY: 0 }, 2: { zoom: 1, panX: 0, panY: 0 } },
+};
+window.__state = state;
 
+const photos = [null, null, null];
+window.__photos = photos;
+
+/** Loads an image from a URL, resolving once it can be drawn. */
 export function loadImage(url) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error(`could not load ${url}`));
+    img.onerror = reject;
     img.src = url;
   });
 }
 
-function currentSize() {
-  return SIZES[state.size] || SIZES.landscape;
-}
-
 function redraw() {
-  const { w, h } = currentSize();
-  if (canvas.width !== w || canvas.height !== h) {
-    canvas.width = w;
-    canvas.height = h;
-  }
+  const size = SIZES[state.size] ?? SIZES.landscape;
+  canvas.width = size.w;
+  canvas.height = size.h;
   drawCover(canvas, state, photos);
-  const note = $('sizeNote');
-  if (note) note.textContent = `${w} × ${h} — ${LAYOUTS[state.layout].name} · ${GRADES[state.grade].name}`;
+  if (sizeNote) sizeNote.textContent = `${size.label} — preview matches the export exactly.`;
 }
 
-function setState(patch) {
-  Object.assign(state, patch);
-  syncControls();
+function fillSelect(select, entries, current) {
+  select.innerHTML = '';
+  for (const [key, value] of Object.entries(entries)) {
+    const option = document.createElement('option');
+    option.value = key;
+    option.textContent = value.name ?? value.label ?? key;
+    if (key === current) option.selected = true;
+    select.appendChild(option);
+  }
+}
+
+function bindText(id, key) {
+  const el = document.getElementById(id);
+  el.value = state[key];
+  el.addEventListener('input', () => { state[key] = el.value; redraw(); });
+}
+
+function bindCrop(slot) {
+  const zoom = document.getElementById(`zoom${slot}`);
+  const panX = document.getElementById(`panx${slot}`);
+  const panY = document.getElementById(`pany${slot}`);
+  if (!zoom || !panX || !panY) return;
+  const apply = () => {
+    state.crops[slot] = {
+      zoom: Math.max(0.5, Number(zoom.value)),
+      panX: Number(panX.value),
+      panY: Number(panY.value),
+    };
+    redraw();
+  };
+  zoom.addEventListener('input', apply);
+  panX.addEventListener('input', apply);
+  panY.addEventListener('input', apply);
+}
+
+async function loadSample(slot, name) {
+  photos[slot] = await loadImage(`samples/${name}.jpg`);
   redraw();
 }
 
-function syncControls() {
-  const set = (id, value) => {
-    const el = $(id);
-    if (el) el.value = value;
-  };
-  set('layout', state.layout);
-  set('grade', state.grade);
-  set('size', state.size);
-  set('caption', state.caption);
-  set('kicker', state.kicker);
-  set('script', state.script);
-  set('strip', state.strip);
-  set('seed', String(state.seed));
+function download(url, filename) {
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
 }
 
-async function loadSample(name, slot) {
-  photos[slot] = await loadImage(`samples/${name}.jpg`);
-}
+// Headless hook: render the current state at any size, PNG data URL.
+window.__renderExport = function renderExport(w, h) {
+  const off = document.createElement('canvas');
+  off.width = w;
+  off.height = h;
+  drawCover(off, state, photos);
+  return off.toDataURL('image/png');
+};
+window.__panelRects = (w, h) => panelRects(state, w, h);
 
-function fillSelect(id, entries) {
-  const el = $(id);
-  if (!el) return;
-  el.innerHTML = '';
-  for (const [value, label] of entries) {
-    const opt = document.createElement('option');
-    opt.value = value;
-    opt.textContent = label;
-    el.appendChild(opt);
+async function init() {
+  fillSelect(document.getElementById('layout'), LAYOUTS, state.layout);
+  fillSelect(document.getElementById('grade'), GRADES, state.grade);
+  fillSelect(document.getElementById('size'), SIZES, state.size);
+  document.getElementById('layout').addEventListener('change', (e) => { state.layout = e.target.value; redraw(); });
+  document.getElementById('grade').addEventListener('change', (e) => { state.grade = e.target.value; redraw(); });
+  document.getElementById('size').addEventListener('change', (e) => { state.size = e.target.value; redraw(); });
+  bindText('caption', 'caption');
+  bindText('kicker', 'kicker');
+  bindText('script', 'script');
+  bindText('strip', 'strip');
+  const seedEl = document.getElementById('seed');
+  seedEl.value = String(state.seed);
+  seedEl.addEventListener('input', () => { state.seed = Number(seedEl.value) || 0; redraw(); });
+  bindCrop(0);
+  bindCrop(1);
+
+  document.getElementById('sample-boulevard').addEventListener('click', () => loadSample(0, 'boulevard'));
+  document.getElementById('sample-pier').addEventListener('click', () => loadSample(1, 'pier'));
+  for (let slot = 0; slot < 3; slot++) {
+    const input = document.getElementById(`photo${slot}`);
+    if (!input) continue;
+    input.addEventListener('change', async (e) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      photos[slot] = await loadImage(URL.createObjectURL(file));
+      redraw();
+    });
   }
-}
 
-function download(canvasEl, filename) {
-  return new Promise((resolve) => {
-    canvasEl.toBlob((blob) => {
-      const a = document.createElement('a');
-      a.href = URL.createObjectURL(blob);
-      a.download = filename;
-      a.click();
-      setTimeout(() => URL.revokeObjectURL(a.href), 5000);
-      resolve();
+  document.getElementById('surprise').addEventListener('click', () => {
+    const layouts = Object.keys(LAYOUTS);
+    const grades = Object.keys(GRADES);
+    state.layout = layouts[Math.floor(Math.random() * layouts.length)];
+    state.grade = grades[Math.floor(Math.random() * grades.length)];
+    state.seed = Math.floor(Math.random() * 10000);
+    document.getElementById('layout').value = state.layout;
+    document.getElementById('grade').value = state.grade;
+    seedEl.value = String(state.seed);
+    redraw();
+  });
+
+  document.getElementById('export').addEventListener('click', () => {
+    canvas.toBlob((blob) => {
+      download(URL.createObjectURL(blob), `palm-city-heat-${canvas.width}x${canvas.height}.png`);
+      status.textContent = `Saved palm-city-heat-${canvas.width}x${canvas.height}.png`;
     }, 'image/png');
   });
-}
 
-async function exportOne(sizeKey) {
-  const { w, h } = SIZES[sizeKey];
-  const out = renderCover(w, h, state, photos);
-  await download(out, `palm-city-heat-${sizeKey}-${w}x${h}.png`);
-  if (status) status.textContent = `Saved palm-city-heat-${sizeKey}-${w}x${h}.png`;
-}
-
-// --- Controls -------------------------------------------------------------
-
-fillSelect('layout', LAYOUT_ORDER.map((id) => [id, LAYOUTS[id].name]));
-fillSelect('grade', GRADE_ORDER.map((id) => [id, GRADES[id].name]));
-fillSelect('size', Object.entries(SIZES).map(([id, s]) => [id, s.label]));
-
-$('layout')?.addEventListener('change', (e) => setState({ layout: e.target.value }));
-$('grade')?.addEventListener('change', (e) => setState({ grade: e.target.value }));
-$('size')?.addEventListener('change', (e) => setState({ size: e.target.value }));
-$('caption')?.addEventListener('input', (e) => setState({ caption: e.target.value }));
-$('kicker')?.addEventListener('input', (e) => setState({ kicker: e.target.value }));
-$('script')?.addEventListener('input', (e) => setState({ script: e.target.value }));
-$('strip')?.addEventListener('input', (e) => setState({ strip: e.target.value }));
-$('seed')?.addEventListener('change', (e) => setState({ seed: Number(e.target.value) || 0 }));
-
-$('photo')?.addEventListener('change', async (e) => {
-  const files = [...e.target.files].slice(0, 3);
-  for (let i = 0; i < files.length; i++) {
-    photos[i] = await loadImage(URL.createObjectURL(files[i]));
-  }
-  redraw();
-  if (status) status.textContent = `${files.length} photo(s) loaded`;
-});
-
-$('loadSamples')?.addEventListener('click', async () => {
-  await loadSample('boulevard', 0);
-  await loadSample('pier', 1);
-  redraw();
-  if (status) status.textContent = 'Sample photos loaded';
-});
-
-// Per-panel crop: pick a photo slot, then zoom and pan it.
-function cropTarget() {
-  const sel = $('cropPhoto');
-  return sel ? Number(sel.value) : 0;
-}
-function applyCrop() {
-  const slot = cropTarget();
-  const crop = state.crops[slot];
-  crop.zoom = Math.max(0.5, Number($('zoom')?.value ?? 1));
-  crop.panX = Number($('panX')?.value ?? 0);
-  crop.panY = Number($('panY')?.value ?? 0);
-  redraw();
-}
-for (const id of ['zoom', 'panX', 'panY']) {
-  $(id)?.addEventListener('input', applyCrop);
-}
-$('cropPhoto')?.addEventListener('change', () => {
-  const crop = state.crops[cropTarget()];
-  if ($('zoom')) $('zoom').value = String(crop.zoom);
-  if ($('panX')) $('panX').value = String(crop.panX);
-  if ($('panY')) $('panY').value = String(crop.panY);
-});
-
-// Surprise-me: a seeded pick of layout, grade, and seed.
-$('surprise')?.addEventListener('click', () => {
-  let s = (state.seed * 2654435761 + 987654321) >>> 0;
-  const rnd = () => {
-    s = (Math.imul(s, 1664525) + 1013904223) >>> 0;
-    return s / 4294967296;
-  };
-  setState({
-    layout: LAYOUT_ORDER[Math.floor(rnd() * LAYOUT_ORDER.length)],
-    grade: GRADE_ORDER[Math.floor(rnd() * GRADE_ORDER.length)],
-    seed: Math.floor(rnd() * 100000),
-  });
-  if (status) status.textContent = 'Surprise! A new seeded combination.';
-});
-
-$('export')?.addEventListener('click', () => exportOne(state.size));
-$('exportAll')?.addEventListener('click', async () => {
-  for (const key of Object.keys(SIZES)) await exportOne(key);
-});
-
-// --- Headless hook ----------------------------------------------------------
-// Used by the screenshot pipeline and by the finalist review: renders the
-// current state at any size and returns a PNG data URL. Fonts are loaded
-// explicitly first, for the same lazy-font reason as in shots.js.
-
-window.__viceCoverState = state;
-window.__viceCoverPhotos = photos;
-window.__renderExport = async function renderExport(width, height) {
-  await loadFontsExplicitly();
-  const out = renderCover(width, height, state, photos);
-  return out.toDataURL('image/png');
-};
-window.__redraw = redraw;
-
-// --- Boot -------------------------------------------------------------------
-
-const query = new URLSearchParams(location.search);
-const shot = query.get('shot');
-
-const api = {
-  setState,
-  loadSample,
-  redraw,
-  fitCanvasToViewport() {
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-  },
-};
-
-if (shot) {
-  runShot(shot, query, api).catch((err) => {
-    console.error(err);
-    window.__shotError = String(err);
-  });
-} else {
-  (async () => {
-    await loadFontsExplicitly();
-    try {
-      await loadSample('boulevard', 0);
-      await loadSample('pier', 1);
-    } catch {
-      // Samples are optional on first paint; the user can load them.
+  document.getElementById('export-all').addEventListener('click', () => {
+    for (const [key, size] of Object.entries(SIZES)) {
+      download(window.__renderExport(size.w, size.h), `palm-city-heat-${size.w}x${size.h}.png`);
     }
-    syncControls();
+    status.textContent = 'Saved all three sizes.';
+  });
+
+  const params = new URLSearchParams(location.search);
+  const shot = params.get('shot');
+  if (shot) {
+    await runShot(shot, params, async (scene) => {
+      if (!scene) { redraw(); return; }
+      state.layout = scene.layout;
+      state.grade = scene.grade;
+      state.size = scene.size;
+      state.caption = scene.caption;
+      state.kicker = scene.kicker;
+      state.script = scene.script;
+      state.strip = scene.strip;
+      state.seed = scene.seed;
+      document.getElementById('layout').value = state.layout;
+      document.getElementById('grade').value = state.grade;
+      document.getElementById('size').value = state.size;
+      document.getElementById('caption').value = state.caption;
+      document.getElementById('kicker').value = state.kicker;
+      document.getElementById('script').value = state.script;
+      document.getElementById('strip').value = state.strip;
+      document.getElementById('seed').value = String(state.seed);
+      await loadSample(0, scene.photo1);
+      await loadSample(1, scene.photo2);
+      redraw();
+    });
+  } else {
+    await ensureFontsForEditor();
+    await loadSample(0, 'boulevard');
+    await loadSample(1, 'pier');
     redraw();
-  })();
+  }
 }
+
+init();

@@ -1,120 +1,162 @@
-// Grades (colour palettes + photo treatments) and layouts (panel maps) for
-// the cover maker. Every number here comes from the round-2 design brief:
-// the champion layout is vice-hero, the champion grade is vivid, and the
-// other four grades and five layouts stay selectable in the editor.
+// Grades and layouts for the cover maker.
+// A grade is a palette: sky stops for drawn scenes, sun and skyline
+// colours, the duotone pair, and the lettering colours. A layout is a
+// list of panels plus the shared title-band and strip wording slots.
+// Panel geometry is in fractions of the cover (x, y, w, h). A panel
+// names a photo slot (0, 1 or 2), a treatment, a face anchor point
+// (fractions of the photo), and its label lines; a panel with
+// scene: 'marina' is drawn procedurally instead of from a photo.
 
 export const GRADES = {
   vivid: {
-    id: 'vivid', name: 'Vivid Sunset', treatment: 'vivid',
+    name: 'Vivid Sunset',
     sky: [[0, '#2b1055'], [0.40, '#a4137a'], [0.70, '#ff5e3a'], [1.00, '#ffc46b']],
-    sun: '#ffe9a8', glow: 'rgba(255,140,60,0.6)',
-    far: '#3d1658', near: '#160a28', windows: '#ffd166', dots: '#ff9e6b',
-    duoDark: '#2b1030', duoLight: '#ffb36b',
-    caption: '#ffffff', outline: '#1c0b2e', kicker: '#ffd166', accent: '#ff2e88',
+    sun: '#ffe9a8',
+    sunGlow: 'rgba(255,140,60,0.6)',
+    farSkyline: '#3d1658',
+    nearSkyline: '#160a28',
+    windows: '#ffd166',
+    dots: '#ff9e6b',
+    duoDark: '#2b1030',
+    duoLight: '#ffb36b',
+    caption: '#ffffff',
+    outline: '#1c0b2e',
+    kicker: '#ffd166',
+    accent: '#ff2e88',
     scrim: 'rgba(10,6,18,0.8)',
   },
   duotone: {
-    id: 'duotone', name: 'Duotone Dusk', treatment: 'duotone',
-    sky: [[0, '#1a1030'], [0.45, '#5c2358'], [0.75, '#b34a5e'], [1.00, '#e08a5a']],
-    sun: '#ffd9a0', glow: 'rgba(200,110,80,0.5)',
-    far: '#2e1745', near: '#120a20', windows: '#e8b25a', dots: '#c97e5a',
-    duoDark: '#241533', duoLight: '#ffb36b',
-    caption: '#ffffff', outline: '#1a0b26', kicker: '#ffd166', accent: '#ff5e8a',
-    scrim: 'rgba(12,7,20,0.8)',
+    name: 'Sepia Duotone',
+    sky: [[0, '#241428'], [0.55, '#5c2a3a'], [1.00, '#c98a4b']],
+    sun: '#f2d8a0',
+    sunGlow: 'rgba(220,150,70,0.5)',
+    farSkyline: '#3a2030',
+    nearSkyline: '#180e18',
+    windows: '#e8b96a',
+    dots: '#c98a4b',
+    duoDark: '#241428',
+    duoLight: '#e8b96a',
+    caption: '#f5ead6',
+    outline: '#1c0b14',
+    kicker: '#e8b96a',
+    accent: '#c94b6b',
+    scrim: 'rgba(16,8,14,0.8)',
   },
   halftone: {
-    id: 'halftone', name: 'Halftone Pop', treatment: 'halftone',
-    sky: [[0, '#12082e'], [0.40, '#7a1e6e'], [0.70, '#ff7e47'], [1.00, '#ffc46b']],
-    sun: '#fff3c4', glow: 'rgba(255,120,60,0.55)',
-    far: '#33124e', near: '#140a26', windows: '#ffd166', dots: '#ff9e6b',
-    duoDark: '#20102e', duoLight: '#ffb36b',
-    caption: '#ffffff', outline: '#1c0b2e', kicker: '#ffd166', accent: '#ff2e88',
-    scrim: 'rgba(10,6,18,0.8)',
+    name: 'Halftone Pop',
+    sky: [[0, '#101c4a'], [0.5, '#7a2a8a'], [1.00, '#ff7e47']],
+    sun: '#ffe066',
+    sunGlow: 'rgba(255,200,60,0.55)',
+    farSkyline: '#232a5e',
+    nearSkyline: '#0d1030',
+    windows: '#ffe066',
+    dots: '#ff7e47',
+    duoDark: '#101c4a',
+    duoLight: '#ffe066',
+    caption: '#ffffff',
+    outline: '#0d1030',
+    kicker: '#ffe066',
+    accent: '#ff2e88',
+    scrim: 'rgba(8,8,24,0.8)',
   },
   clean: {
-    id: 'clean', name: 'Clean Coast', treatment: 'clean',
-    sky: [[0, '#1b2a52'], [0.45, '#3a6ea5'], [0.75, '#e08a5a'], [1.00, '#f2c078']],
-    sun: '#fff6d8', glow: 'rgba(255,190,110,0.5)',
-    far: '#2c3a5e', near: '#141c30', windows: '#ffe9a8', dots: '#f2b078',
-    duoDark: '#1c2440', duoLight: '#f2c078',
-    caption: '#ffffff', outline: '#14203a', kicker: '#ffe9a8', accent: '#ff7e47',
-    scrim: 'rgba(10,14,28,0.8)',
+    name: 'Clean Daylight',
+    sky: [[0, '#1d4a6b'], [0.55, '#3a7a9e'], [1.00, '#ffd9a0']],
+    sun: '#fff3c4',
+    sunGlow: 'rgba(255,220,140,0.5)',
+    farSkyline: '#2a4a5e',
+    nearSkyline: '#122636',
+    windows: '#ffd166',
+    dots: '#7ec8e3',
+    duoDark: '#122636',
+    duoLight: '#ffd9a0',
+    caption: '#ffffff',
+    outline: '#122636',
+    kicker: '#ffd166',
+    accent: '#ff5e7a',
+    scrim: 'rgba(10,20,30,0.8)',
   },
   grain: {
-    id: 'grain', name: 'Grain Reel', treatment: 'grain',
-    sky: [[0, '#241031'], [0.40, '#8a2f6d'], [0.70, '#ff8a4a'], [1.00, '#ffc46b']],
-    sun: '#ffe9a8', glow: 'rgba(255,140,60,0.55)',
-    far: '#38164e', near: '#150a24', windows: '#ffd166', dots: '#ff9e6b',
-    duoDark: '#261230', duoLight: '#ffb36b',
-    caption: '#ffffff', outline: '#1c0b2e', kicker: '#ffd166', accent: '#ff2e88',
-    scrim: 'rgba(10,6,18,0.8)',
+    name: 'Grain Noir',
+    sky: [[0, '#14101c'], [0.5, '#3c2438'], [1.00, '#8a4a5e']],
+    sun: '#e8d8c0',
+    sunGlow: 'rgba(200,160,120,0.45)',
+    farSkyline: '#241a2c',
+    nearSkyline: '#0e0a12',
+    windows: '#d8b878',
+    dots: '#8a6a72',
+    duoDark: '#14101c',
+    duoLight: '#d8b878',
+    caption: '#f0e8e0',
+    outline: '#0e0a12',
+    kicker: '#d8b878',
+    accent: '#b85e7a',
+    scrim: 'rgba(10,8,12,0.8)',
   },
 };
 
-export const GRADE_ORDER = ['vivid', 'duotone', 'halftone', 'clean', 'grain'];
-
-// Face anchors, measured from the kit samples: the boulevard face zone
-// runs y 0.03–0.35 and the pier face zone y 0.02–0.42, so the anchors sit
-// just below the top of each face and keep every head inside its panel
-// at landscape, portrait, and square alike.
-// A panel: fractions of the cover, a photo slot (0/1/2) or a drawn scene,
-// an anchor point (fractions of the photo) that the crop centres on, and
-// its label lines. Photo slots: 0 = first photo, 1 = second photo.
-function panel(x, y, w, h, photo, anchor, label, sub, scene = null) {
-  return { x, y, w, h, photo, anchor, label, sub, scene };
-}
-
+// Every layout's panels carry label/sub text, an anchor, and a
+// treatment so the compositor stays uniform across layouts.
 export const LAYOUTS = {
   'vice-hero': {
-    id: 'vice-hero', name: 'Vice Hero + Story',
+    name: 'Vice Hero + Story',
     panels: [
-      panel(0, 0, 0.52, 0.70, 0, [0.46, 0.19], 'OCEAN DRIVE', '6:42 PM — LOOKING FOR TROUBLE'),
-      panel(0.535, 0, 0.465, 0.3425, 1, [0.40, 0.22], 'PIER 26', '5:30 AM — GONE FISHING'),
-      panel(0.535, 0.3575, 0.465, 0.3425, null, null, 'MARINA DEL SOL', '7:48 PM — NO WITNESSES', 'marina'),
+      { x: 0, y: 0, w: 0.52, h: 0.70, photo: 0, treatment: 'vivid', anchor: [0.46, 0.19],
+        label: 'OCEAN DRIVE', sub: '6:42 PM — LOOKING FOR TROUBLE' },
+      { x: 0.535, y: 0, w: 0.465, h: 0.3425, photo: 1, treatment: 'vivid', anchor: [0.40, 0.22],
+        label: 'PIER 26', sub: '5:30 AM — GONE FISHING' },
+      { x: 0.535, y: 0.3575, w: 0.465, h: 0.3425, scene: 'marina',
+        label: 'MARINA DEL SOL', sub: '7:48 PM — NO WITNESSES' },
     ],
+    badges: true,
   },
-  single: {
-    id: 'single', name: 'Single Hero',
+  'hero-left': {
+    name: 'Hero Left',
     panels: [
-      panel(0, 0, 1, 0.70, 0, [0.46, 0.19], 'OCEAN DRIVE', '6:42 PM — LOOKING FOR TROUBLE'),
+      { x: 0, y: 0, w: 0.58, h: 0.70, photo: 0, treatment: 'vivid', anchor: [0.46, 0.19],
+        label: 'OCEAN DRIVE', sub: '6:42 PM — LOOKING FOR TROUBLE' },
+      { x: 0.595, y: 0, w: 0.405, h: 0.3425, photo: 1, treatment: 'vivid', anchor: [0.40, 0.22],
+        label: 'PIER 26', sub: '5:30 AM — GONE FISHING' },
+      { x: 0.595, y: 0.3575, w: 0.405, h: 0.3425, scene: 'skyline',
+        label: 'MARINA DEL SOL', sub: '7:48 PM — NO WITNESSES' },
     ],
-  },
-  duo: {
-    id: 'duo', name: 'Duo Split',
-    panels: [
-      panel(0, 0, 0.4925, 0.70, 0, [0.46, 0.19], 'OCEAN DRIVE', '6:42 PM — LOOKING FOR TROUBLE'),
-      panel(0.5075, 0, 0.4925, 0.70, 1, [0.40, 0.22], 'PIER 26', '5:30 AM — GONE FISHING'),
-    ],
+    badges: true,
   },
   filmstrip: {
-    id: 'filmstrip', name: 'Filmstrip',
+    name: 'Filmstrip',
     panels: [
-      panel(0, 0, 0.58, 0.70, 0, [0.46, 0.19], 'OCEAN DRIVE', '6:42 PM — LOOKING FOR TROUBLE'),
-      panel(0.595, 0, 0.405, 0.2233, 1, [0.40, 0.22], 'PIER 26', '5:30 AM — GONE FISHING'),
-      panel(0.595, 0.2383, 0.405, 0.2233, null, null, 'MARINA DEL SOL', '7:48 PM — NO WITNESSES', 'marina'),
-      panel(0.595, 0.4767, 0.405, 0.2233, 0, [0.46, 0.19], 'PALM ROW', '9:15 PM — LIGHTS OUT'),
+      { x: 0, y: 0, w: 1.0, h: 0.42, photo: 0, treatment: 'vivid', anchor: [0.46, 0.25],
+        label: 'OCEAN DRIVE', sub: '6:42 PM — LOOKING FOR TROUBLE' },
+      { x: 0, y: 0.435, w: 0.4925, h: 0.265, photo: 1, treatment: 'clean', anchor: [0.40, 0.22],
+        label: 'PIER 26', sub: '5:30 AM — GONE FISHING' },
+      { x: 0.5075, y: 0.435, w: 0.4925, h: 0.265, scene: 'marina',
+        label: 'MARINA DEL SOL', sub: '7:48 PM — NO WITNESSES' },
     ],
+    badges: true,
   },
   grid: {
-    id: 'grid', name: 'Four Corners',
+    name: 'Four Corners',
     panels: [
-      panel(0, 0, 0.4925, 0.3425, 0, [0.46, 0.19], 'OCEAN DRIVE', '6:42 PM — LOOKING FOR TROUBLE'),
-      panel(0.5075, 0, 0.4925, 0.3425, 1, [0.40, 0.22], 'PIER 26', '5:30 AM — GONE FISHING'),
-      panel(0, 0.3575, 0.4925, 0.3425, null, null, 'MARINA DEL SOL', '7:48 PM — NO WITNESSES', 'marina'),
-      panel(0.5075, 0.3575, 0.4925, 0.3425, null, null, 'SKYLINE', '8:30 PM — BIG MONEY', 'backdrop'),
+      { x: 0, y: 0, w: 0.4925, h: 0.3425, photo: 0, treatment: 'vivid', anchor: [0.46, 0.19],
+        label: 'OCEAN DRIVE', sub: '6:42 PM — LOOKING FOR TROUBLE' },
+      { x: 0.5075, y: 0, w: 0.4925, h: 0.3425, photo: 1, treatment: 'vivid', anchor: [0.40, 0.22],
+        label: 'PIER 26', sub: '5:30 AM — GONE FISHING' },
+      { x: 0, y: 0.3575, w: 0.4925, h: 0.3425, scene: 'skyline',
+        label: 'PALM ROW', sub: '9:15 PM — LIGHTS OUT' },
+      { x: 0.5075, y: 0.3575, w: 0.4925, h: 0.3425, scene: 'marina',
+        label: 'MARINA DEL SOL', sub: '7:48 PM — NO WITNESSES' },
     ],
+    badges: true,
   },
-  trio: {
-    id: 'trio', name: 'Three Columns',
+  poster: {
+    name: 'Single Poster',
     panels: [
-      panel(0, 0, 0.3233, 0.70, 0, [0.46, 0.19], 'OCEAN DRIVE', '6:42 PM — LOOKING FOR TROUBLE'),
-      panel(0.3383, 0, 0.3233, 0.70, 1, [0.40, 0.22], 'PIER 26', '5:30 AM — GONE FISHING'),
-      panel(0.6767, 0, 0.3233, 0.70, null, null, 'MARINA DEL SOL', '7:48 PM — NO WITNESSES', 'marina'),
+      { x: 0, y: 0, w: 1.0, h: 0.70, photo: 0, treatment: 'vivid', anchor: [0.46, 0.30],
+        label: 'OCEAN DRIVE', sub: '6:42 PM — LOOKING FOR TROUBLE' },
     ],
+    badges: true,
   },
 };
-
-export const LAYOUT_ORDER = ['vice-hero', 'single', 'duo', 'filmstrip', 'grid', 'trio'];
 
 export const SIZES = {
   landscape: { w: 1920, h: 1080, label: 'Landscape 1920 × 1080' },
@@ -122,21 +164,21 @@ export const SIZES = {
   square: { w: 1080, h: 1080, label: 'Square 1080 × 1080' },
 };
 
-export function defaultState() {
-  return {
-    layout: 'vice-hero',
-    grade: 'vivid',
-    caption: 'PALM CITY HEAT',
-    kicker: 'SUMMER NEVER ENDS',
-    script: 'Every light a story',
-    strip: 'SUMMER NEVER ENDS — SHOT ON YOUR OWN CAMERA',
-    seed: 42,
-    size: 'landscape',
-    // Per photo slot: zoom (never below 0.5) and pan offsets in photo fractions.
-    crops: [
-      { zoom: 1, panX: 0, panY: 0 },
-      { zoom: 1, panX: 0, panY: 0 },
-      { zoom: 1, panX: 0, panY: 0 },
-    ],
-  };
-}
+export const CHAMPION = {
+  layout: 'vice-hero',
+  grade: 'vivid',
+  size: 'landscape',
+  caption: 'PALM CITY HEAT',
+  kicker: 'SUMMER NEVER ENDS',
+  script: 'Every light a story',
+  strip: 'SUMMER NEVER ENDS — SHOT ON YOUR OWN CAMERA',
+  seed: 42,
+  photo1: 'boulevard',
+  photo2: 'pier',
+};
+
+// Lookups with a safe fallback so a stale saved state can never
+// crash the compositor: unknown keys resolve to the champion.
+export function gradeFor(key) { return GRADES[key] ?? GRADES.vivid; }
+export function layoutFor(key) { return LAYOUTS[key] ?? LAYOUTS['vice-hero']; }
+export function sizeFor(key) { return SIZES[key] ?? SIZES.landscape; }

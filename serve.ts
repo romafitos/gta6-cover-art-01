@@ -1,11 +1,10 @@
-// A tiny static server for app/ (Node 22+, standard library only), so
-// the cover maker can be tried locally without a build step:
+// A tiny static server for app/ (Node 22+, standard library only),
+// so the cover maker can be tried locally without a build step:
 // `node serve.ts` serves app/ on http://localhost:8080
-// (or `node serve.ts --port 8090` for another port). It sends the MIME
-// types an offline web app needs and refuses any path outside app/;
-// anything else would be scope creep for a development convenience.
-// Binds 127.0.0.1 only: this server is for local testing, not the web.
-
+// (or `node serve.ts --port 8090` for another port). It sends the
+// MIME types an offline web app needs, refuses any path outside
+// app/, and otherwise does nothing clever: a development
+// convenience, not a server for the internet.
 import { createReadStream, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
@@ -38,6 +37,8 @@ const MIME = {
 };
 
 createServer((request, response) => {
+  // Every request is answered from the app/ tree only; anything
+  // else is a 403 or a 404, never a directory listing.
   const url = new URL(request.url ?? '/', 'http://localhost');
   let pathname;
   try {

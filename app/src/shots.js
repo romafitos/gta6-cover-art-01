@@ -3,58 +3,44 @@
 // &photo1=&photo2=&seed=
 //
 // The trap this file exists to avoid: document.fonts.ready alone does
-// NOT load a font that has never been used. A lazy font is only fetched
-// on first use, so the ready promise can resolve before it was ever
-// requested, and measureText then measures the fallback. Every font is
-// therefore requested explicitly by name before anything is measured
-// or drawn, and the ready flag is only set after two painted frames
-// plus a final redraw.
+// not load a font that has never been used — a lazy font is only
+// requested on first use, so the ready promise can resolve before
+// the font has even been fetched, and measureText then measures the
+// fallback. The runner therefore requests each of the three fonts
+// by name first, waits for the ready promise, paints two animation
+// frames, redraws once more, and only then sets the ready flag.
 
-const FONT_REQUESTS = [
-  '400 40px Anton',
-  '400 40px "Archivo Black"',
-  '400 40px Pacifico',
-];
-
-export async function loadFontsExplicitly() {
-  await Promise.all(FONT_REQUESTS.map((spec) => document.fonts.load(spec)));
+export async function loadFonts() {
+  await Promise.all([
+    document.fonts.load('16px Anton'),
+    document.fonts.load('16px "Archivo Black"'),
+    document.fonts.load('16px Pacifico'),
+  ]);
   await document.fonts.ready;
 }
 
-export async function runShot(shot, query, api) {
-  await loadFontsExplicitly();
+export async function runShot(shot, query, apply) {
   if (shot === 'cover') document.body.classList.add('shot-cover');
-
-  const patch = {};
-  const layout = query.get('layout');
-  const grade = query.get('grade');
-  const size = query.get('size');
-  const caption = query.get('caption');
-  const kicker = query.get('kicker');
-  const script = query.get('script');
-  const strip = query.get('strip');
-  const seed = query.get('seed');
-  if (layout) patch.layout = layout;
-  if (grade) patch.grade = grade;
-  if (size) patch.size = size;
-  if (caption !== null) patch.caption = caption;
-  if (kicker !== null) patch.kicker = kicker;
-  if (script !== null) patch.script = script;
-  if (strip !== null) patch.strip = strip;
-  if (seed !== null) patch.seed = Number(seed) || 0;
-  api.setState(patch);
-
-  const photo1 = query.get('photo1') || query.get('photo') || 'boulevard';
-  const photo2 = query.get('photo2') || 'pier';
-  await api.loadSample(photo1, 0);
-  await api.loadSample(photo2, 1);
-
-  // Size the preview canvas to the viewport in shot mode so a cover shot
-  // fills the frame edge to edge.
-  api.fitCanvasToViewport();
-  api.redraw();
+  await loadFonts();
+  await apply({
+    layout: query.get('layout') ?? 'vice-hero',
+    grade: query.get('grade') ?? 'vivid',
+    size: query.get('size') ?? 'landscape',
+    caption: query.get('caption') ?? 'PALM CITY HEAT',
+    kicker: query.get('kicker') ?? 'SUMMER NEVER ENDS',
+    script: query.get('script') ?? 'Every light a story',
+    strip: query.get('strip') ?? 'SUMMER NEVER ENDS — SHOT ON YOUR OWN CAMERA',
+    photo1: query.get('photo1') ?? 'boulevard',
+    photo2: query.get('photo2') ?? 'pier',
+    seed: Number(query.get('seed') ?? 42),
+  });
   await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  await loadFontsExplicitly();
-  api.redraw();
+  await apply(null); // redraw once more with fonts genuinely loaded
   window.__shotReady = true;
+}
+
+// The same explicit loads for the interactive path, so a user's
+// first paint cannot race the fonts either.
+export async function ensureFontsForEditor() {
+  await loadFonts();
 }
